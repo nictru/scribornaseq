@@ -12,7 +12,7 @@ process BAM_MULTIMAPPERS {
 
     output:
     tuple val(meta), path("${prefix}.multimappers.bam"), emit: multimappers
-    tuple val(meta), path("${prefix}.unique.bam"),       emit: unique
+    tuple val(meta), path("${prefix}.unique.bam"),       emit: uniquemappers
     path  "versions.yml",                                emit: versions
 
     when:

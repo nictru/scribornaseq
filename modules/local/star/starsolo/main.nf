@@ -7,10 +7,10 @@ process STAR_STARSOLO {
     tag "$meta.id"
     label 'process_high'
 
-    conda 'bioconda::star=2.7.10b'
+    conda 'bioconda::star=2.7.11b bioconda::samtools=1.21'
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/star:2.7.10b--h9ee0642_0' :
-        'biocontainers/star:2.7.10b--h9ee0642_0' }"
+        'oras://community.wave.seqera.io/library/samtools_star:49284a612da8d71d' :
+        'community.wave.seqera.io/library/samtools_star:bc8099e10cdd1c08' }"
 
     input:
     //
@@ -68,7 +68,7 @@ process STAR_STARSOLO {
 
     STAR \\
         --genomeDir $index \\
-        --readFilesIn ${reverse.join( "," )} ${forward.join( "," )} \\
+        --readFilesIn ${(reverse ?: []).join( "," )} ${forward.join( "," )} \\
         --runThreadN $task.cpus \\
         --outFileNamePrefix $prefix. \\
         --soloCBwhitelist whitelist.uncompressed.txt \\
@@ -96,8 +96,11 @@ process STAR_STARSOLO {
         find ${prefix}.Solo.out \\( -name "*.tsv" -o -name "*.mtx" \\) -exec gzip {} \\;
     fi
 
-    if [ -d ${prefix}.Solo.out/Velocyto ]; then
+    if [ -d ${prefix}.Solo.out/Velocyto/raw ]; then
         mv ${prefix}.Solo.out/Velocyto/raw ${prefix}.Solo.out/Velocyto/velocyto_raw
+    fi
+
+    if [ -d ${prefix}.Solo.out/Velocyto/filtered ]; then
         mv ${prefix}.Solo.out/Velocyto/filtered ${prefix}.Solo.out/Velocyto/velocyto_filtered
     fi
 

@@ -3,23 +3,24 @@
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                 } from '../modules/nf-core/fastqc/main'
-include { GUNZIP as GUNZIP_FASTA } from '../modules/nf-core/gunzip/main'
-include { GUNZIP as GUNZIP_GTF   } from '../modules/nf-core/gunzip/main'
-include { CUSTOM_GTFFILTER       } from '../modules/nf-core/custom/gtffilter'
-include { STAR_GENOMEGENERATE    } from '../modules/nf-core/star/genomegenerate'
-include { STAR_STARSOLO          } from '../modules/local/star/starsolo'
-include { BAM_MULTIMAPPERS       } from '../modules/local/bam/multimappers'
-include { SAMTOOLS_INDEX         } from '../modules/nf-core/samtools/index'
-include { BAM_PRIORITIZE         } from '../modules/local/bam/prioritize'
-include { SAMTOOLS_MERGE         } from '../modules/nf-core/samtools/merge'
-include { SAMTOOLS_SORT          } from '../modules/nf-core/samtools/sort'
-include { PICARD_CLEANSAM        } from '../modules/nf-core/picard/cleansam'
-include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { paramsSummaryMap       } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_scribornaseq_pipeline'
+include { FASTQC                    } from '../modules/nf-core/fastqc/main'
+include { GUNZIP as GUNZIP_FASTA    } from '../modules/nf-core/gunzip/main'
+include { GUNZIP as GUNZIP_GTF      } from '../modules/nf-core/gunzip/main'
+include { CUSTOM_GTFFILTER          } from '../modules/nf-core/custom/gtffilter'
+include { STAR_GENOMEGENERATE       } from '../modules/nf-core/star/genomegenerate'
+include { STAR_STARSOLO as ALIGN    } from '../modules/local/star/starsolo'
+include { BAM_MULTIMAPPERS          } from '../modules/local/bam/multimappers'
+include { SAMTOOLS_INDEX            } from '../modules/nf-core/samtools/index'
+include { BAM_PRIORITIZE            } from '../modules/local/bam/prioritize'
+include { SAMTOOLS_MERGE            } from '../modules/nf-core/samtools/merge'
+include { SAMTOOLS_SORT             } from '../modules/nf-core/samtools/sort'
+include { PICARD_CLEANSAM           } from '../modules/nf-core/picard/cleansam'
+include { STAR_STARSOLO as QUANTIFY } from '../modules/local/star/starsolo'
+include { MULTIQC                   } from '../modules/nf-core/multiqc/main'
+include { paramsSummaryMap          } from 'plugin/nf-schema'
+include { paramsSummaryMultiqc      } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { softwareVersionsToYAML    } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { methodsDescriptionText    } from '../subworkflows/local/utils_nfcore_scribornaseq_pipeline'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -45,8 +46,9 @@ workflow SCRIBORNASEQ {
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
 
-    ch_fasta = Channel.value([[id: 'fasta'], file(params.fasta, checkIfExists: true)])
-    ch_gtf   = Channel.value([[id: 'gtf'], file(params.gtf, checkIfExists: true)])
+    ch_fasta             = Channel.value([[id: 'fasta'], file(params.fasta, checkIfExists: true)])
+    ch_gtf               = Channel.value([[id: 'gtf'], file(params.gtf, checkIfExists: true)])
+    ch_barcode_whitelist = Channel.value(file(params.barcode_whitelist, checkIfExists: true))
 
     if (params.fasta.endsWith('.gz')) {
         ch_fasta    = GUNZIP_FASTA ( ch_fasta ).gunzip.collect()
@@ -69,20 +71,20 @@ workflow SCRIBORNASEQ {
         ch_star_index = Channel.value([[id: 'star_index'], file(params.star_index, checkIfExists: true)])
     }
 
-    STAR_STARSOLO(
+    ALIGN(
         ch_samplesheet,
         ch_star_index,
         ch_gtf,
-        file(params.barcode_whitelist, checkIfExists: true),
+        ch_barcode_whitelist,
         "CB_UMI_Simple",
         params.solo_feature
     )
-    ch_versions = ch_versions.mix(STAR_STARSOLO.out.versions)
+    ch_versions = ch_versions.mix(ALIGN.out.versions)
 
-    BAM_MULTIMAPPERS(STAR_STARSOLO.out.bam_sorted)
+    BAM_MULTIMAPPERS(ALIGN.out.bam_sorted)
     ch_versions = ch_versions.mix(BAM_MULTIMAPPERS.out.versions)
 
-    ch_uniquemappers = BAM_MULTIMAPPERS.out.unique
+    ch_uniquemappers = BAM_MULTIMAPPERS.out.uniquemappers
     ch_multimappers  = BAM_MULTIMAPPERS.out.multimappers
 
     SAMTOOLS_INDEX(ch_multimappers)
@@ -103,6 +105,23 @@ workflow SCRIBORNASEQ {
 
     PICARD_CLEANSAM(SAMTOOLS_SORT.out.bam)
     ch_versions = ch_versions.mix(PICARD_CLEANSAM.out.versions)
+
+    QUANTIFY(
+        PICARD_CLEANSAM.out.bam,
+        ch_star_index,
+        ch_gtf,
+        ch_barcode_whitelist,
+        "CB_UMI_Simple",
+        params.solo_feature
+    )
+    ch_versions = ch_versions.mix(QUANTIFY.out.versions)
+
+    ch_counts = QUANTIFY.out.raw_counts
+        .join(QUANTIFY.out.raw_velocyto, remainder: true)
+        .map{meta, count, velocity -> {
+                return [meta + [input_type: 'raw'], velocity ? [count, velocity] : [count]]
+            }
+        }
 
     //
     // Collate and save software versions
