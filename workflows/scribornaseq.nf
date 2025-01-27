@@ -4,6 +4,10 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 include { FASTQC                 } from '../modules/nf-core/fastqc/main'
+include { GUNZIP as GUNZIP_FASTA } from '../modules/nf-core/gunzip/main'
+include { GUNZIP as GUNZIP_GTF   } from '../modules/nf-core/gunzip/main'
+include { CUSTOM_GTFFILTER       } from '../modules/nf-core/custom/gtffilter'
+include { STAR_GENOMEGENERATE    } from '../modules/nf-core/star/genomegenerate'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -24,6 +28,7 @@ workflow SCRIBORNASEQ {
 
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
+
     //
     // MODULE: Run FastQC
     //
@@ -32,6 +37,30 @@ workflow SCRIBORNASEQ {
     )
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+
+    ch_fasta = Channel.value([[id: 'fasta'], file(params.fasta, checkIfExists: true)])
+    ch_gtf   = Channel.value([[id: 'gtf'], file(params.gtf, checkIfExists: true)])
+
+    if (params.fasta.endsWith('.gz')) {
+        ch_fasta    = GUNZIP_FASTA ( ch_fasta ).gunzip.collect()
+        ch_versions = ch_versions.mix(GUNZIP_FASTA.out.versions)
+    }
+
+    if (params.gtf.endsWith('.gz')) {
+        ch_gtf      = GUNZIP_GTF ( ch_gtf ).gunzip.collect()
+        ch_versions = ch_versions.mix(GUNZIP_GTF.out.versions)
+    }
+
+    CUSTOM_GTFFILTER (ch_gtf, ch_fasta)
+    ch_gtf = CUSTOM_GTFFILTER.out.gtf.collect()
+    ch_versions = ch_versions.mix(CUSTOM_GTFFILTER.out.versions)
+
+    if (!params.star_index) {
+        STAR_GENOMEGENERATE(ch_fasta, ch_gtf)
+        ch_star_index = STAR_GENOMEGENERATE.out.star_index.collect()
+    } else {
+        ch_star_index = Channel.value([[id: 'star_index'], file(params.star_index, checkIfExists: true)])
+    }
 
     //
     // Collate and save software versions
