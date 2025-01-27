@@ -9,6 +9,12 @@ include { GUNZIP as GUNZIP_GTF   } from '../modules/nf-core/gunzip/main'
 include { CUSTOM_GTFFILTER       } from '../modules/nf-core/custom/gtffilter'
 include { STAR_GENOMEGENERATE    } from '../modules/nf-core/star/genomegenerate'
 include { STAR_STARSOLO          } from '../modules/local/star/starsolo'
+include { BAM_MULTIMAPPERS       } from '../modules/local/bam/multimappers'
+include { SAMTOOLS_INDEX         } from '../modules/nf-core/samtools/index'
+include { BAM_PRIORITIZE         } from '../modules/local/bam/prioritize'
+include { SAMTOOLS_MERGE         } from '../modules/nf-core/samtools/merge'
+include { SAMTOOLS_SORT          } from '../modules/nf-core/samtools/sort'
+include { PICARD_CLEANSAM        } from '../modules/nf-core/picard/cleansam'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -71,6 +77,32 @@ workflow SCRIBORNASEQ {
         "CB_UMI_Simple",
         params.solo_feature
     )
+    ch_versions = ch_versions.mix(STAR_STARSOLO.out.versions)
+
+    BAM_MULTIMAPPERS(STAR_STARSOLO.out.bam_sorted)
+    ch_versions = ch_versions.mix(BAM_MULTIMAPPERS.out.versions)
+
+    ch_uniquemappers = BAM_MULTIMAPPERS.out.unique
+    ch_multimappers  = BAM_MULTIMAPPERS.out.multimappers
+
+    SAMTOOLS_INDEX(ch_multimappers)
+    ch_versions = ch_versions.mix(SAMTOOLS_INDEX.out.versions)
+
+    BAM_PRIORITIZE(ch_multimappers.join(SAMTOOLS_INDEX.out.bai), ch_gtf, "rRNA")
+    ch_versions = ch_versions.mix(BAM_PRIORITIZE.out.versions)
+    ch_multimappers = BAM_PRIORITIZE.out.modified
+
+    ch_bams = ch_uniquemappers.join(ch_multimappers)
+        .map{meta, unique, multi -> [meta, [unique, multi]]}
+
+    SAMTOOLS_MERGE(ch_bams, [[], []], [[], []])
+    ch_versions = ch_versions.mix(SAMTOOLS_MERGE.out.versions)
+
+    SAMTOOLS_SORT(SAMTOOLS_MERGE.out.bam, ch_fasta)
+    ch_versions = ch_versions.mix(SAMTOOLS_SORT.out.versions)
+
+    PICARD_CLEANSAM(SAMTOOLS_SORT.out.bam)
+    ch_versions = ch_versions.mix(PICARD_CLEANSAM.out.versions)
 
     //
     // Collate and save software versions

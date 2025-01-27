@@ -25,6 +25,26 @@
                         "git_sha": "cf17ca47590cc578dfb47db1c2a44ef86f89976d",
                         "installed_by": ["modules"]
                     },
+                    "picard/cleansam": {
+                        "branch": "master",
+                        "git_sha": "49f4e50534fe4b64101e62ea41d5dc43b1324358",
+                        "installed_by": ["modules"]
+                    },
+                    "samtools/index": {
+                        "branch": "master",
+                        "git_sha": "b13f07be4c508d6ff6312d354d09f2493243e208",
+                        "installed_by": ["modules"]
+                    },
+                    "samtools/merge": {
+                        "branch": "master",
+                        "git_sha": "b13f07be4c508d6ff6312d354d09f2493243e208",
+                        "installed_by": ["modules"]
+                    },
+                    "samtools/sort": {
+                        "branch": "master",
+                        "git_sha": "b7800db9b069ed505db3f9d91b8c72faea9be17b",
+                        "installed_by": ["modules"]
+                    },
                     "star/genomegenerate": {
                         "branch": "master",
                         "git_sha": "3c259f0ac1ed9ae3f6b835461d054edffc60120e",
