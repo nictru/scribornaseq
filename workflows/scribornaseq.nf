@@ -16,6 +16,8 @@ include { SAMTOOLS_MERGE            } from '../modules/nf-core/samtools/merge'
 include { SAMTOOLS_SORT             } from '../modules/nf-core/samtools/sort'
 include { PICARD_CLEANSAM           } from '../modules/nf-core/picard/cleansam'
 include { STAR_STARSOLO as QUANTIFY } from '../modules/local/star/starsolo'
+include { ANNDATA_READMTX           } from '../modules/local/anndata/readmtx'
+include { ANNDATA_CONCAT            } from '../modules/local/anndata/concat'
 include { MULTIQC                   } from '../modules/nf-core/multiqc/main'
 include { paramsSummaryMap          } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc      } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -122,6 +124,12 @@ workflow SCRIBORNASEQ {
                 return [meta + [input_type: 'raw'], velocity ? [count, velocity] : [count]]
             }
         }
+
+    ANNDATA_READMTX(ch_counts)
+    ch_versions = ch_versions.mix(ANNDATA_READMTX.out.versions)
+
+    ANNDATA_CONCAT(ANNDATA_READMTX.out.h5ad.map{it[1]}.collect().map{[[id: 'combined'], it]})
+    ch_versions = ch_versions.mix(ANNDATA_CONCAT.out.versions)
 
     //
     // Collate and save software versions
