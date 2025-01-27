@@ -74,6 +74,7 @@ process STAR_STARSOLO {
         --soloCBwhitelist whitelist.uncompressed.txt \\
         --soloType $protocol \\
         --soloFeatures $star_feature \\
+        --limitBAMsortRAM ${task.memory.toBytes()} \\
         $out_sam_type \\
         $ignore_gtf \\
         $seq_center \\
