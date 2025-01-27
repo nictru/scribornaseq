@@ -108,6 +108,12 @@
                     "help_text": "This parameter is *mandatory* if `--genome` is not specified.",
                     "fa_icon": "fas fa-database"
                 },
+                "barcode_whitelist": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Path to cell barcode whitelist file.",
+                    "fa_icon": "fas fa-database"
+                },
                 "solo_feature": {
                     "type": "string",
                     "description": "STARsolo feature type.",

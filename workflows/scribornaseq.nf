@@ -8,6 +8,7 @@ include { GUNZIP as GUNZIP_FASTA } from '../modules/nf-core/gunzip/main'
 include { GUNZIP as GUNZIP_GTF   } from '../modules/nf-core/gunzip/main'
 include { CUSTOM_GTFFILTER       } from '../modules/nf-core/custom/gtffilter'
 include { STAR_GENOMEGENERATE    } from '../modules/nf-core/star/genomegenerate'
+include { STAR_STARSOLO          } from '../modules/local/star/starsolo'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -61,6 +62,15 @@ workflow SCRIBORNASEQ {
     } else {
         ch_star_index = Channel.value([[id: 'star_index'], file(params.star_index, checkIfExists: true)])
     }
+
+    STAR_STARSOLO(
+        ch_samplesheet,
+        ch_star_index,
+        ch_gtf,
+        file(params.barcode_whitelist, checkIfExists: true),
+        "CB_UMI_Simple",
+        params.solo_feature
+    )
 
     //
     // Collate and save software versions

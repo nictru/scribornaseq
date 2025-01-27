@@ -29,6 +29,11 @@
                         "branch": "master",
                         "git_sha": "3c259f0ac1ed9ae3f6b835461d054edffc60120e",
                         "installed_by": ["modules"]
+                    },
+                    "star/starsolo": {
+                        "branch": "master",
+                        "git_sha": "3c259f0ac1ed9ae3f6b835461d054edffc60120e",
+                        "installed_by": ["modules"]
                     }
                 }
             },
