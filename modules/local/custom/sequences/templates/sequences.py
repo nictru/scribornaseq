@@ -11,14 +11,9 @@ with SeqIO.parse("${fasta}", "fasta") as records, \
     for record in records:
         gene_type = record.description.split(" ")[1]
 
-        padding = "N" * int(1e3)
-        record.seq = padding + record.seq + padding
+        padding_length = int(1e3)
 
-        record.description = ""
-
-        SeqIO.write(record, output, "fasta")
-
-        start = 1 + len(padding)
+        start = 1 + padding_length
         end = start + len(record.seq) - 1
         chr = f"cusom_{record.id}"
         identifier = record.id
@@ -29,6 +24,13 @@ with SeqIO.parse("${fasta}", "fasta") as records, \
                 gtf.write(prefix + f'gene_id "{identifier}"; gene_type "{gene_type}"; gene_name "{identifier}";\\n')
             else:
                 gtf.write(prefix + f'gene_id "{identifier}"; transcript_id "{identifier}.1"; gene_type "{gene_type}"; gene_name "{identifier}";\\n')
+
+        record.id = chr
+        record.description = ""
+        padding = "N" * padding_length
+        record.seq = padding + record.seq + padding
+
+        SeqIO.write(record, output, "fasta")
 
 versions = {
     "versions": {
