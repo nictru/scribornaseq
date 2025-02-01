@@ -3,20 +3,10 @@
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                                } from '../modules/nf-core/fastqc'
-include { FASTP                                 } from '../modules/nf-core/fastp'
-include { GUNZIP as GUNZIP_FASTA                } from '../modules/nf-core/gunzip'
-include { GUNZIP as GUNZIP_GTF                  } from '../modules/nf-core/gunzip'
-include { CUSTOM_GTFFILTER                      } from '../modules/nf-core/custom/gtffilter'
-include { STAR_GENOMEGENERATE                   } from '../modules/nf-core/star/genomegenerate'
+include { PREPARE_READS                         } from '../subworkflows/local/prepare_reads'
+include { PREPARE_GENOME                        } from '../subworkflows/local/prepare_genome'
 include { STAR_STARSOLO as ALIGN                } from '../modules/local/star/starsolo'
-include { SAMTOOLS_VIEW as EXTRACT_MULTIMAPPERS } from '../modules/nf-core/samtools/view'
-include { SAMTOOLS_VIEW as EXTRACT_UNIQUEMAPPERS} from '../modules/nf-core/samtools/view'
-include { SAMTOOLS_INDEX                        } from '../modules/nf-core/samtools/index'
-include { BAM_PRIORITIZE                        } from '../modules/local/bam/prioritize'
-include { SAMTOOLS_MERGE                        } from '../modules/nf-core/samtools/merge'
-include { SAMTOOLS_SORT                         } from '../modules/nf-core/samtools/sort'
-include { PICARD_CLEANSAM                       } from '../modules/nf-core/picard/cleansam'
+include { ADJUST_BAMS                           } from '../subworkflows/local/adjust_bams'
 include { STAR_STARSOLO as QUANTIFY             } from '../modules/local/star/starsolo'
 include { ANNDATA_READMTX                       } from '../modules/local/anndata/readmtx'
 include { ANNDATA_CONCAT                        } from '../modules/local/anndata/concat'
@@ -36,61 +26,26 @@ workflow SCRIBORNASEQ {
 
     take:
     ch_samplesheet // channel: samplesheet read in from --input
-    main:
 
+    main:
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
 
-    //
-    // MODULE: Run FastQC
-    //
-    FASTQC (
-        ch_samplesheet
-    )
-    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
-    ch_versions = ch_versions.mix(FASTQC.out.versions.first())
-
-    ch_reads = ch_samplesheet.multiMap{meta, reads ->
-        read1: [meta, reads[0]]
-        read2: [meta + [single_end: true], reads[1]]
-    }
-    FASTP (
-        ch_reads.read2,
-        [], [], [], []
-    )
-    ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json)
-    ch_versions = ch_versions.mix(FASTP.out.versions)
-
-    ch_trimmed = ch_reads.read1.join(FASTP.out.reads.map{meta, read -> [meta + [single_end: false], read]})
-        .map{meta, read1, read2 -> [meta, [read1, read2]]}
-
-    ch_fasta             = Channel.value([[id: 'fasta'], file(params.fasta, checkIfExists: true)])
-    ch_gtf               = Channel.value([[id: 'gtf'], file(params.gtf, checkIfExists: true)])
     ch_barcode_whitelist = Channel.value(file(params.barcode_whitelist, checkIfExists: true))
 
-    if (params.fasta.endsWith('.gz')) {
-        ch_fasta    = GUNZIP_FASTA ( ch_fasta ).gunzip.collect()
-        ch_versions = ch_versions.mix(GUNZIP_FASTA.out.versions)
-    }
+    PREPARE_READS(ch_samplesheet)
+    ch_reads = PREPARE_READS.out.reads
+    ch_versions = ch_versions.mix(PREPARE_READS.out.versions)
+    ch_multiqc_files = ch_multiqc_files.mix(PREPARE_READS.out.multiqc_files)
 
-    if (params.gtf.endsWith('.gz')) {
-        ch_gtf      = GUNZIP_GTF ( ch_gtf ).gunzip.collect()
-        ch_versions = ch_versions.mix(GUNZIP_GTF.out.versions)
-    }
-
-    CUSTOM_GTFFILTER (ch_gtf, ch_fasta)
-    ch_gtf = CUSTOM_GTFFILTER.out.gtf.collect()
-    ch_versions = ch_versions.mix(CUSTOM_GTFFILTER.out.versions)
-
-    if (!params.star_index) {
-        STAR_GENOMEGENERATE(ch_fasta, ch_gtf)
-        ch_star_index = STAR_GENOMEGENERATE.out.star_index.collect()
-    } else {
-        ch_star_index = Channel.value([[id: 'star_index'], file(params.star_index, checkIfExists: true)])
-    }
+    PREPARE_GENOME()
+    ch_star_index = PREPARE_GENOME.out.star_index
+    ch_fasta      = PREPARE_GENOME.out.fasta
+    ch_gtf        = PREPARE_GENOME.out.gtf
+    ch_versions   = ch_versions.mix(PREPARE_GENOME.out.versions)
 
     ALIGN(
-        ch_trimmed,
+        ch_reads,
         ch_star_index,
         ch_gtf,
         ch_barcode_whitelist,
@@ -99,35 +54,11 @@ workflow SCRIBORNASEQ {
     )
     ch_versions = ch_versions.mix(ALIGN.out.versions)
 
-    // Samttols view expects an index
-    ch_alignment_bam = ALIGN.out.bam_sorted.map{meta, bam -> [meta, bam, []]}
-
-    EXTRACT_MULTIMAPPERS(ch_alignment_bam, [[], []], [])
-    ch_versions = ch_versions.mix(EXTRACT_MULTIMAPPERS.out.versions)
-
-    EXTRACT_UNIQUEMAPPERS(ch_alignment_bam, [[], []], [])
-    ch_versions = ch_versions.mix(EXTRACT_UNIQUEMAPPERS.out.versions)
-
-    ch_multimappers  = EXTRACT_MULTIMAPPERS.out.bam
-    ch_uniquemappers = EXTRACT_UNIQUEMAPPERS.out.bam
-
-    BAM_PRIORITIZE(ch_multimappers.join(EXTRACT_MULTIMAPPERS.out.csi), ch_gtf, "rRNA")
-    ch_versions = ch_versions.mix(BAM_PRIORITIZE.out.versions)
-
-    SAMTOOLS_SORT(BAM_PRIORITIZE.out.modified, ch_fasta)
-    ch_versions = ch_versions.mix(SAMTOOLS_SORT.out.versions)
-
-    ch_bams = ch_uniquemappers.join(SAMTOOLS_SORT.out.bam)
-        .map{meta, unique, multi -> [meta, [unique, multi]]}
-
-    SAMTOOLS_MERGE(ch_bams, [[], []], [[], []])
-    ch_versions = ch_versions.mix(SAMTOOLS_MERGE.out.versions)
-
-    PICARD_CLEANSAM(SAMTOOLS_MERGE.out.bam)
-    ch_versions = ch_versions.mix(PICARD_CLEANSAM.out.versions)
+    ADJUST_BAMS(ALIGN.out.bam_sorted, ch_gtf, ch_fasta)
+    ch_versions = ch_versions.mix(ADJUST_BAMS.out.versions)
 
     QUANTIFY(
-        PICARD_CLEANSAM.out.bam,
+        ADJUST_BAMS.out.bam,
         ch_star_index,
         ch_gtf,
         ch_barcode_whitelist,
