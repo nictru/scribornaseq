@@ -15,7 +15,7 @@ with SeqIO.parse("${fasta}", "fasta") as records, \
 
         start = 1 + padding_length
         end = start + len(record.seq) - 1
-        chr = f"cusom_{record.id}"
+        chr = f"custom_{record.id}"
         identifier = record.id
 
         for feature_type in ["gene", "transcript", "exon"]:
