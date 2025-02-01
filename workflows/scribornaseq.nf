@@ -3,26 +3,28 @@
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                    } from '../modules/nf-core/fastqc/main'
-include { GUNZIP as GUNZIP_FASTA    } from '../modules/nf-core/gunzip/main'
-include { GUNZIP as GUNZIP_GTF      } from '../modules/nf-core/gunzip/main'
-include { CUSTOM_GTFFILTER          } from '../modules/nf-core/custom/gtffilter'
-include { STAR_GENOMEGENERATE       } from '../modules/nf-core/star/genomegenerate'
-include { STAR_STARSOLO as ALIGN    } from '../modules/local/star/starsolo'
-include { BAM_MULTIMAPPERS          } from '../modules/local/bam/multimappers'
-include { SAMTOOLS_INDEX            } from '../modules/nf-core/samtools/index'
-include { BAM_PRIORITIZE            } from '../modules/local/bam/prioritize'
-include { SAMTOOLS_MERGE            } from '../modules/nf-core/samtools/merge'
-include { SAMTOOLS_SORT             } from '../modules/nf-core/samtools/sort'
-include { PICARD_CLEANSAM           } from '../modules/nf-core/picard/cleansam'
-include { STAR_STARSOLO as QUANTIFY } from '../modules/local/star/starsolo'
-include { ANNDATA_READMTX           } from '../modules/local/anndata/readmtx'
-include { ANNDATA_CONCAT            } from '../modules/local/anndata/concat'
-include { MULTIQC                   } from '../modules/nf-core/multiqc/main'
-include { paramsSummaryMap          } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc      } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { softwareVersionsToYAML    } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText    } from '../subworkflows/local/utils_nfcore_scribornaseq_pipeline'
+include { FASTQC                                } from '../modules/nf-core/fastqc'
+include { FASTP                                 } from '../modules/nf-core/fastp'
+include { GUNZIP as GUNZIP_FASTA                } from '../modules/nf-core/gunzip'
+include { GUNZIP as GUNZIP_GTF                  } from '../modules/nf-core/gunzip'
+include { CUSTOM_GTFFILTER                      } from '../modules/nf-core/custom/gtffilter'
+include { STAR_GENOMEGENERATE                   } from '../modules/nf-core/star/genomegenerate'
+include { STAR_STARSOLO as ALIGN                } from '../modules/local/star/starsolo'
+include { SAMTOOLS_VIEW as EXTRACT_MULTIMAPPERS } from '../modules/nf-core/samtools/view'
+include { SAMTOOLS_VIEW as EXTRACT_UNIQUEMAPPERS} from '../modules/nf-core/samtools/view'
+include { SAMTOOLS_INDEX                        } from '../modules/nf-core/samtools/index'
+include { BAM_PRIORITIZE                        } from '../modules/local/bam/prioritize'
+include { SAMTOOLS_MERGE                        } from '../modules/nf-core/samtools/merge'
+include { SAMTOOLS_SORT                         } from '../modules/nf-core/samtools/sort'
+include { PICARD_CLEANSAM                       } from '../modules/nf-core/picard/cleansam'
+include { STAR_STARSOLO as QUANTIFY             } from '../modules/local/star/starsolo'
+include { ANNDATA_READMTX                       } from '../modules/local/anndata/readmtx'
+include { ANNDATA_CONCAT                        } from '../modules/local/anndata/concat'
+include { MULTIQC                               } from '../modules/nf-core/multiqc'
+include { paramsSummaryMap                      } from 'plugin/nf-schema'
+include { paramsSummaryMultiqc                  } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { softwareVersionsToYAML                } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { methodsDescriptionText                } from '../subworkflows/local/utils_nfcore_scribornaseq_pipeline'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -47,6 +49,20 @@ workflow SCRIBORNASEQ {
     )
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+
+    ch_reads = ch_samplesheet.multiMap{meta, reads ->
+        read1: [meta, reads[0]]
+        read2: [meta + [single_end: true], reads[1]]
+    }
+    FASTP (
+        ch_reads.read2,
+        [], [], [], []
+    )
+    ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json)
+    ch_versions = ch_versions.mix(FASTP.out.versions)
+
+    ch_trimmed = ch_reads.read1.join(FASTP.out.reads.map{meta, read -> [meta + [single_end: false], read]})
+        .map{meta, read1, read2 -> [meta, [read1, read2]]}
 
     ch_fasta             = Channel.value([[id: 'fasta'], file(params.fasta, checkIfExists: true)])
     ch_gtf               = Channel.value([[id: 'gtf'], file(params.gtf, checkIfExists: true)])
@@ -74,7 +90,7 @@ workflow SCRIBORNASEQ {
     }
 
     ALIGN(
-        ch_samplesheet,
+        ch_trimmed,
         ch_star_index,
         ch_gtf,
         ch_barcode_whitelist,
@@ -83,29 +99,31 @@ workflow SCRIBORNASEQ {
     )
     ch_versions = ch_versions.mix(ALIGN.out.versions)
 
-    BAM_MULTIMAPPERS(ALIGN.out.bam_sorted)
-    ch_versions = ch_versions.mix(BAM_MULTIMAPPERS.out.versions)
+    // Samttols view expects an index
+    ch_alignment_bam = ALIGN.out.bam_sorted.map{meta, bam -> [meta, bam, []]}
 
-    ch_uniquemappers = BAM_MULTIMAPPERS.out.uniquemappers
-    ch_multimappers  = BAM_MULTIMAPPERS.out.multimappers
+    EXTRACT_MULTIMAPPERS(ch_alignment_bam, [[], []], [])
+    ch_versions = ch_versions.mix(EXTRACT_MULTIMAPPERS.out.versions)
 
-    SAMTOOLS_INDEX(ch_multimappers)
-    ch_versions = ch_versions.mix(SAMTOOLS_INDEX.out.versions)
+    EXTRACT_UNIQUEMAPPERS(ch_alignment_bam, [[], []], [])
+    ch_versions = ch_versions.mix(EXTRACT_UNIQUEMAPPERS.out.versions)
 
-    BAM_PRIORITIZE(ch_multimappers.join(SAMTOOLS_INDEX.out.bai), ch_gtf, "rRNA")
+    ch_multimappers  = EXTRACT_MULTIMAPPERS.out.bam
+    ch_uniquemappers = EXTRACT_UNIQUEMAPPERS.out.bam
+
+    BAM_PRIORITIZE(ch_multimappers.join(EXTRACT_MULTIMAPPERS.out.csi), ch_gtf, "rRNA")
     ch_versions = ch_versions.mix(BAM_PRIORITIZE.out.versions)
-    ch_multimappers = BAM_PRIORITIZE.out.modified
 
-    ch_bams = ch_uniquemappers.join(ch_multimappers)
+    SAMTOOLS_SORT(BAM_PRIORITIZE.out.modified, ch_fasta)
+    ch_versions = ch_versions.mix(SAMTOOLS_SORT.out.versions)
+
+    ch_bams = ch_uniquemappers.join(SAMTOOLS_SORT.out.bam)
         .map{meta, unique, multi -> [meta, [unique, multi]]}
 
     SAMTOOLS_MERGE(ch_bams, [[], []], [[], []])
     ch_versions = ch_versions.mix(SAMTOOLS_MERGE.out.versions)
 
-    SAMTOOLS_SORT(SAMTOOLS_MERGE.out.bam, ch_fasta)
-    ch_versions = ch_versions.mix(SAMTOOLS_SORT.out.versions)
-
-    PICARD_CLEANSAM(SAMTOOLS_SORT.out.bam)
+    PICARD_CLEANSAM(SAMTOOLS_MERGE.out.bam)
     ch_versions = ch_versions.mix(PICARD_CLEANSAM.out.versions)
 
     QUANTIFY(
