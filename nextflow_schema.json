@@ -95,6 +95,28 @@
                 }
             }
         },
+        "custom_reference_options": {
+            "title": "Custom reference options",
+            "type": "object",
+            "fa_icon": "fas fa-dna",
+            "description": "Add sequences and annotations that are not included in the reference genome.",
+            "properties": {
+                "custom_sequences": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Path to custom sequences file.",
+                    "fa_icon": "fas fa-database",
+                    "pattern": "^\\S+\\.fasta$"
+                },
+                "custom_annotations": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Path to custom annotations file.",
+                    "fa_icon": "fas fa-database",
+                    "pattern": "^\\S+\\.gtf$"
+                }
+            }
+        },
         "star_options": {
             "title": "STAR options",
             "type": "object",
