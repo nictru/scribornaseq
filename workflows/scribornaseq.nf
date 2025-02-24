@@ -5,9 +5,7 @@
 */
 include { PREPARE_READS                         } from '../subworkflows/local/prepare_reads'
 include { PREPARE_GENOME                        } from '../subworkflows/local/prepare_genome'
-include { STAR_STARSOLO as ALIGN                } from '../modules/local/star/starsolo'
-include { ADJUST_BAMS                           } from '../subworkflows/local/adjust_bams'
-include { STAR_STARSOLO as QUANTIFY             } from '../modules/local/star/starsolo'
+include { STAR_STARSOLO                         } from '../modules/local/star/starsolo'
 include { ANNDATA_READMTX                       } from '../modules/local/anndata/readmtx'
 include { ANNDATA_CONCAT                        } from '../modules/local/anndata/concat'
 include { MULTIQC                               } from '../modules/nf-core/multiqc'
@@ -44,7 +42,7 @@ workflow SCRIBORNASEQ {
     ch_gtf        = PREPARE_GENOME.out.gtf
     ch_versions   = ch_versions.mix(PREPARE_GENOME.out.versions)
 
-    ALIGN(
+    STAR_STARSOLO(
         ch_reads,
         ch_star_index,
         ch_gtf,
@@ -52,23 +50,10 @@ workflow SCRIBORNASEQ {
         "CB_UMI_Simple",
         params.solo_feature
     )
-    ch_versions = ch_versions.mix(ALIGN.out.versions)
+    ch_versions = ch_versions.mix(STAR_STARSOLO.out.versions)
 
-    ADJUST_BAMS(ALIGN.out.bam_sorted, ch_gtf, ch_fasta)
-    ch_versions = ch_versions.mix(ADJUST_BAMS.out.versions)
-
-    QUANTIFY(
-        ADJUST_BAMS.out.bam,
-        ch_star_index,
-        ch_gtf,
-        ch_barcode_whitelist,
-        "CB_UMI_Simple",
-        params.solo_feature
-    )
-    ch_versions = ch_versions.mix(QUANTIFY.out.versions)
-
-    ch_counts = QUANTIFY.out.raw_counts
-        .join(QUANTIFY.out.raw_velocyto, remainder: true)
+    ch_counts = STAR_STARSOLO.out.raw_counts
+        .join(STAR_STARSOLO.out.raw_velocyto, remainder: true)
         .map{meta, count, velocity -> {
                 return [meta + [input_type: 'raw'], velocity ? [count, velocity] : [count]]
             }
