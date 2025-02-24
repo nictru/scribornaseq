@@ -325,6 +325,26 @@
                     "hidden": true
                 }
             }
+        },
+        "skip_options": {
+            "title": "Skip options",
+            "type": "object",
+            "fa_icon": "fas fa-fast-forward",
+            "description": "Options to skip certain steps in the pipeline.",
+            "properties": {
+                "skip_fastqc": {
+                    "type": "boolean",
+                    "description": "Skip FastQC quality control step.",
+                    "fa_icon": "fas fa-forward",
+                    "default": false
+                },
+                "skip_fastp": {
+                    "type": "boolean", 
+                    "description": "Skip fastp preprocessing step.",
+                    "fa_icon": "fas fa-forward",
+                    "default": false
+                }
+            }
         }
     },
     "allOf": [
@@ -333,6 +353,9 @@
         },
         {
             "$ref": "#/$defs/reference_genome_options"
+        },
+        {
+            "$ref": "#/$defs/skip_options"
         },
         {
             "$ref": "#/$defs/institutional_config_options"
