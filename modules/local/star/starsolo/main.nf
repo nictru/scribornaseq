@@ -23,6 +23,7 @@ process STAR_STARSOLO {
     path whitelist
     val protocol
     val star_feature
+    path sjdb
 
     output:
     tuple val(meta), path('*d.out.bam')                            , emit: bam
@@ -48,7 +49,7 @@ process STAR_STARSOLO {
     script:
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def ignore_gtf = params.star_ignore_sjdbgtf ? '' : "--sjdbGTFfile $gtf"
+    def sjdbFileChrStartEnd = sjdb ? "--sjdbFileChrStartEnd $sjdb" : ''
     def seq_center = meta.seq_center ? "--outSAMattrRGline ID:$prefix 'CN:$meta.seq_center' 'SM:$prefix'" : "--outSAMattrRGline ID:$prefix 'SM:$prefix'"
     def out_sam_type = (args.contains('--outSAMtype')) ? '' : '--outSAMtype BAM Unsorted'
     def mv_unsorted_bam = (args.contains('--outSAMtype BAM Unsorted SortedByCoordinate')) ? "mv ${prefix}.Aligned.out.bam ${prefix}.Aligned.unsort.out.bam" : ''
@@ -71,12 +72,13 @@ process STAR_STARSOLO {
         --readFilesIn ${(reverse ?: []).join( "," )} ${forward.join( "," )} \\
         --runThreadN $task.cpus \\
         --outFileNamePrefix $prefix. \\
+        --sjdbGTFfile $gtf \\
         --soloCBwhitelist whitelist.uncompressed.txt \\
         --soloType $protocol \\
         --soloFeatures $star_feature \\
         --limitBAMsortRAM ${task.memory.toBytes()} \\
+        $sjdbFileChrStartEnd \\
         $out_sam_type \\
-        $ignore_gtf \\
         $seq_center \\
         $cell_filter \\
         $args \\

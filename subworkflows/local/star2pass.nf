@@ -1,5 +1,4 @@
 include { STAR_STARSOLO as FIRST_PASS  } from '../../modules/local/star/starsolo'
-include { STAR_SJDB                    } from '../../modules/local/star/sjdb'
 include { STAR_STARSOLO as SECOND_PASS } from '../../modules/local/star/starsolo'
 
 workflow STAR2PASS {
@@ -21,20 +20,19 @@ workflow STAR2PASS {
         ch_gtf,
         barcode_whitelist,
         protocol,
-        star_feature
+        star_feature,
+        []
     )
     ch_versions = ch_versions.mix(FIRST_PASS.out.versions)
-
-    STAR_SJDB(FIRST_PASS.out.sjdb.map{it[1]}.collect().map{[[id: 'combined'], it]})
-    ch_versions = ch_versions.mix(STAR_SJDB.out.versions)
 
     SECOND_PASS(
         ch_reads,
         ch_star_index,
-        STAR_SJDB.out.sjtab,
+        ch_gtf,
         barcode_whitelist,
         protocol,
-        star_feature
+        star_feature,
+        FIRST_PASS.out.sjdb.map{it[1]}.collect()
     )
     ch_versions = ch_versions.mix(SECOND_PASS.out.versions)
 
