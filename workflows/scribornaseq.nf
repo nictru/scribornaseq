@@ -5,7 +5,7 @@
 */
 include { PREPARE_READS                         } from '../subworkflows/local/prepare_reads'
 include { PREPARE_GENOME                        } from '../subworkflows/local/prepare_genome'
-include { STAR_STARSOLO                         } from '../modules/local/star/starsolo'
+include { STAR2PASS                             } from '../subworkflows/local/star2pass'
 include { ANNDATA_READMTX                       } from '../modules/local/anndata/readmtx'
 include { ANNDATA_CONCAT                        } from '../modules/local/anndata/concat'
 include { MULTIQC                               } from '../modules/nf-core/multiqc'
@@ -42,7 +42,7 @@ workflow SCRIBORNASEQ {
     ch_gtf        = PREPARE_GENOME.out.gtf
     ch_versions   = ch_versions.mix(PREPARE_GENOME.out.versions)
 
-    STAR_STARSOLO(
+    STAR2PASS(
         ch_reads,
         ch_star_index,
         ch_gtf,
@@ -50,10 +50,10 @@ workflow SCRIBORNASEQ {
         "CB_UMI_Simple",
         params.solo_feature
     )
-    ch_versions = ch_versions.mix(STAR_STARSOLO.out.versions)
+    ch_versions = ch_versions.mix(STAR2PASS.out.versions)
 
-    ch_counts = STAR_STARSOLO.out.raw_counts
-        .join(STAR_STARSOLO.out.raw_velocyto, remainder: true)
+    ch_counts = STAR2PASS.out.raw_counts
+        .join(STAR2PASS.out.raw_velocyto, remainder: true)
         .map{meta, count, velocity -> {
                 return [meta + [input_type: 'raw'], velocity ? [count, velocity] : [count]]
             }

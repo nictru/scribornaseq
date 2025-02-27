@@ -40,7 +40,7 @@ process STAR_STARSOLO {
     tuple val(meta), path('*toTranscriptome.out.bam'), optional:true, emit: bam_transcript
     tuple val(meta), path('*Aligned.unsort.out.bam') , optional:true, emit: bam_unsorted
     tuple val(meta), path('*fastq.gz')               , optional:true, emit: fastq
-    tuple val(meta), path('*.tab')                   , optional:true, emit: tab
+    tuple val(meta), path('*.SJ.out.tab')            , optional:true, emit: sjdb
 
     when:
     task.ext.when == null || task.ext.when
