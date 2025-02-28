@@ -57,7 +57,7 @@ workflow SCRIBORNASEQ {
         .map{meta, count, velocity -> {
                 return [meta + [input_type: 'raw'], velocity ? [count, velocity] : [count]]
             }
-        }
+        }.mix(STAR2PASS.out.raw_sj.map{meta, sj -> [meta + [input_type: 'sj_raw'], sj]})
 
     ANNDATA_READMTX(ch_counts)
     ch_versions = ch_versions.mix(ANNDATA_READMTX.out.versions)

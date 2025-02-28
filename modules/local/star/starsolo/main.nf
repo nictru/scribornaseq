@@ -30,6 +30,7 @@ process STAR_STARSOLO {
     tuple val(meta), path('*.Solo.out')                            , emit: counts
     tuple val(meta), path ("*.Solo.out/Gene*/raw")                 , emit: raw_counts
     tuple val(meta), path ("*.Solo.out/Gene*/filtered")            , emit: filtered_counts
+    tuple val(meta), path ("*.Solo.out/SJ/sj_raw")                 , emit: raw_sj, optional:true
     tuple val(meta), path ("*.Solo.out/Velocyto/velocyto_raw")     , emit: raw_velocyto, optional:true
     tuple val(meta), path ("*.Solo.out/Velocyto/velocyto_filtered"), emit: filtered_velocyto, optional:true
     tuple val(meta), path('*Log.final.out')                        , emit: log_final
@@ -105,6 +106,10 @@ process STAR_STARSOLO {
 
     if [ -d ${prefix}.Solo.out/Velocyto/filtered ]; then
         mv ${prefix}.Solo.out/Velocyto/filtered ${prefix}.Solo.out/Velocyto/velocyto_filtered
+    fi
+
+    if [ -f ${prefix}.Solo.out/SJ/raw ]; then 
+        mv ${prefix}.Solo.out/SJ/raw ${prefix}.Solo.out/SJ/sj_raw
     fi
 
     cat <<-END_VERSIONS > versions.yml

@@ -39,5 +39,6 @@ workflow STAR2PASS {
     emit:
     raw_counts = SECOND_PASS.out.raw_counts
     raw_velocyto = SECOND_PASS.out.raw_velocyto
+    raw_sj = SECOND_PASS.out.raw_sj
     versions = ch_versions
 }
