@@ -46,9 +46,9 @@ if __name__ == "__main__":
     adata = ad.concat(dict_of_h5ad, label="sample", merge="unique", index_unique="_")
 
     # merge with data.frame, on sample information
-    adata.write_h5ad("${meta.id}_${meta.input_type}_matrix.h5ad")
+    adata.write_h5ad("${meta.id}_matrix.h5ad")
 
-    print("Wrote h5ad file to {}".format("${meta.id}_${meta.input_type}_matrix.h5ad"))
+    print("Wrote h5ad file to {}".format("${meta.id}_matrix.h5ad"))
 
     # dump versions
     dump_versions()
