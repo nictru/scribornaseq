@@ -108,8 +108,9 @@ process STAR_STARSOLO {
         mv ${prefix}.Solo.out/Velocyto/filtered ${prefix}.Solo.out/Velocyto/velocyto_filtered
     fi
 
-    if [ -f ${prefix}.Solo.out/SJ/raw ]; then 
+    if [ -d ${prefix}.Solo.out/SJ/raw ]; then 
         mv ${prefix}.Solo.out/SJ/raw ${prefix}.Solo.out/SJ/sj_raw
+        gzip -f ${prefix}.Solo.out/SJ/sj_raw/features.tsv
     fi
 
     cat <<-END_VERSIONS > versions.yml

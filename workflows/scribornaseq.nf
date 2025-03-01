@@ -7,6 +7,7 @@ include { PREPARE_READS                         } from '../subworkflows/local/pr
 include { PREPARE_GENOME                        } from '../subworkflows/local/prepare_genome'
 include { STAR2PASS                             } from '../subworkflows/local/star2pass'
 include { ANNDATA_READMTX                       } from '../modules/local/anndata/readmtx'
+include { ANNDATA_READ_SJ_MTX                   } from '../modules/local/anndata/read_sj_mtx'
 include { ANNDATA_CONCAT                        } from '../modules/local/anndata/concat'
 include { MULTIQC                               } from '../modules/nf-core/multiqc'
 include { paramsSummaryMap                      } from 'plugin/nf-schema'
@@ -52,17 +53,23 @@ workflow SCRIBORNASEQ {
     )
     ch_versions = ch_versions.mix(STAR2PASS.out.versions)
 
+    ANNDATA_READ_SJ_MTX(STAR2PASS.out.raw_sj.map{meta, sj -> [meta + [input_type: 'sj_raw'], sj]})
+    ch_versions = ch_versions.mix(ANNDATA_READ_SJ_MTX.out.versions)
+
     ch_counts = STAR2PASS.out.raw_counts
         .join(STAR2PASS.out.raw_velocyto, remainder: true)
         .map{meta, count, velocity -> {
                 return [meta + [input_type: 'raw'], velocity ? [count, velocity] : [count]]
             }
-        }.mix(STAR2PASS.out.raw_sj.map{meta, sj -> [meta + [input_type: 'sj_raw'], sj]})
+        }
 
     ANNDATA_READMTX(ch_counts)
     ch_versions = ch_versions.mix(ANNDATA_READMTX.out.versions)
 
-    ANNDATA_CONCAT(ANNDATA_READMTX.out.h5ad.map{it[1]}.collect().map{[[id: 'combined'], it]})
+    ANNDATA_CONCAT(ANNDATA_READMTX.out.h5ad
+        .mix(ANNDATA_READ_SJ_MTX.out.h5ad)
+        .map{meta, h5ad -> [[id: meta.input_type], h5ad]}
+        .groupTuple())
     ch_versions = ch_versions.mix(ANNDATA_CONCAT.out.versions)
 
     //
